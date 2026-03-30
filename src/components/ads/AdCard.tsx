@@ -50,26 +50,30 @@ export function AdCard({ ad, searchQuery = "" }: AdCardProps) {
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* ── Media ── */}
-      <div className="relative overflow-hidden bg-gray-100" style={{ aspectRatio: "4/5" }}>
-        {!imgError ? (
-          <Image
-            src={ad.thumbnail_url || ad.media_url}
-            alt={ad.store_name}
-            fill
-            className={cn(
-              "object-cover transition-transform duration-500",
-              isHovered && "scale-105"
-            )}
-            onError={() => setImgError(true)}
-            sizes="(max-width: 768px) 100vw, 33vw"
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-            <span className="text-4xl font-black text-blue-300">
-              {ad.store_name.charAt(0)}
-            </span>
-          </div>
-        )}
+<div className="relative overflow-hidden bg-gray-100" style={{ aspectRatio: "4/5" }}>
+  {!imgError ? (
+    <Image
+      // أضفنا || "" لضمان عدم تمرير null أبداً، وإذا كان كلاهما null سيذهب للـ onError
+      src={ad.thumbnail_url || ad.media_url || ""} 
+      alt={ad.store_name || "إعلان"}
+      fill
+      // إضافة unoptimized مهمة جداً الآن للتأكد أن المشكلة ليست من إعدادات الصور في next.config
+      unoptimized 
+      className={cn(
+        "object-cover transition-transform duration-500",
+        isHovered && "scale-105"
+      )}
+      onError={() => setImgError(true)}
+      sizes="(max-width: 768px) 100vw, 33vw"
+    />
+  ) : (
+    // هذا الجزء سيظهر إذا فشلت الصورة أو كانت الروابط فارغة
+    <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+       <span className="text-4xl font-black text-blue-300">
+         {ad.store_name ? ad.store_name.charAt(0) : "A"}
+       </span>
+    </div>
+  )}
 
         {/* Gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
