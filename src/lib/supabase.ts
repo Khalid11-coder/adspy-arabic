@@ -1,22 +1,20 @@
 import { createClient } from "@supabase/supabase-js";
-import type { Ad } from "@/types";
 
-const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+// تأكد أن الأسماء مطابقة تماماً لما هو موجود في ملف .env.local
+const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnon, {
-  auth: { persistSession: false },
-  realtime: { params: { eventsPerSecond: 10 } },
-});
+// التحقق من وجود القيم قبل التشغيل لتجنب أخطاء وقت التنفيذ
+if (!supabaseUrl || !supabaseAnon) {
+  console.error("Missing Supabase Environment Variables");
+}
 
-export type Database = {
-  public: {
-    Tables: {
-      ads_library: {
-        Row: Ad;
-        Insert: Omit<Ad, "id" | "created_at">;
-        Update: Partial<Ad>;
-      };
-    };
-  };
-};
+export const supabase = createClient(
+  supabaseUrl || "", 
+  supabaseAnon || "", 
+  {
+    auth: {
+      persistSession: false,
+    },
+  }
+);

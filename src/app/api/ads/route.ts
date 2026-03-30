@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { MOCK_ADS } from "@/lib/mock-data";
+import { createClient } from "@supabase/supabase-js";
 import type { Ad, SortOption, AdCategory, AdPlatform, AdStatus } from "@/types";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export const dynamic = "force-dynamic";
 
@@ -15,62 +20,61 @@ export async function GET(req: NextRequest) {
   const limit    = parseInt(searchParams.get("limit") || "9");
   const offset   = parseInt(searchParams.get("offset") || "0");
 
-  /* ── SUPABASE QUERY (swap MOCK_ADS for real Supabase when env vars are set) ── */
-  // const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  // if (supabaseUrl) {
-  //   let query = supabase.from("ads_library").select("*", { count: "exact" });
-  //   if (search)            query = query.or(`store_name.ilike.%${search}%`);
-  //   if (category !== "الكل") query = query.eq("category", category);
-  //   if (platform !== "all") query = query.eq("platform", platform);
-  //   if (status !== "all")   query = query.eq("status", status);
-  //   switch (sort) {
-  //     case "latest":      query = query.order("start_date", { ascending: false }); break;
-  //     case "impressions": query = query.order("impressions", { ascending: false }); break;
-  //     case "clicks":      query = query.order("clicks", { ascending: false }); break;
-  //     case "ctr":         query = query.order("ctr", { ascending: false }); break;
-  //   }
-  //   const { data, count, error } = await query.range(offset, offset + limit - 1);
-  //   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  //   return NextResponse.json({ data, total: count, has_more: offset + limit < (count ?? 0) });
-  // }
+  try {
+    const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
-  /* ── MOCK fallback ── */
-  let filtered: Ad[] = [...MOCK_ADS];
+    let query = supabase
+      .from("ads_library")
+      .select("*", { count: "exact" });
 
-  if (search) {
-    filtered = filtered.filter(
-      (ad) =>
-        ad.store_name.toLowerCase().includes(search) ||
-        ad.category.toLowerCase().includes(search)
-    );
-  }
-  if (category !== "الكل") {
-    filtered = filtered.filter((ad) => ad.category === category);
-  }
-  if (platform !== "all") {
-    filtered = filtered.filter((ad) => ad.platform === platform);
-  }
-  if (status !== "all") {
-    filtered = filtered.filter((ad) => ad.status === status);
-  }
-
-  // Sort
-  filtered.sort((a, b) => {
-    switch (sort) {
-      case "latest":      return new Date(b.start_date).getTime() - new Date(a.start_date).getTime();
-      case "impressions": return b.impressions - a.impressions;
-      case "clicks":      return b.clicks - a.clicks;
-      case "ctr":         return b.ctr - a.ctr;
-      default:            return 0;
+    if (search) {
+      query = query.or(`store_name.ilike.%${search}%,category.ilike.%${search}%`);
     }
-  });
+    if (category !== "الكل") {
+      query = query.eq("category", category);
+    }
+    if (platform !== "all") {
+      query = query.eq("platform", platform);
+    }
+    if (status !== "all") {
+      query = query.eq("status", status);
+    }
 
-  const total    = filtered.length;
-  const paginated = filtered.slice(offset, offset + limit);
+    switch (sort) {
+      case "latest":
+        query = query.order("start_date", { ascending: false });
+        break;
+      case "impressions":
+        query = query.order("impressions", { ascending: false });
+        break;
+      case "clicks":
+        query = query.order("clicks", { ascending: false });
+        break;
+      case "ctr":
+        query = query.order("ctr", { ascending: false });
+        break;
+    }
 
-  return NextResponse.json({
-    data: paginated,
-    total,
-    has_more: offset + limit < total,
-  });
+    const { data, count, error } = await query.range(offset, offset + limit - 1);
+
+    if (error) {
+      console.error("Supabase error:", error);
+      return NextResponse.json({ data: [], total: 0, has_more: false }, { status: 500 });
+    }
+
+    const total = count || 0;
+    const has_more = offset + limit < total;
+
+    return NextResponse.json({
+      data: data || [],
+      total,
+      has_more,
+    });
+  } catch (err: any) {
+    console.error("API route error:", err);
+    return NextResponse.json({ data: [], total: 0, has_more: false }, { status: 500 });
+  }
 }

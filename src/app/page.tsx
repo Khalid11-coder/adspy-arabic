@@ -17,6 +17,8 @@ const DEFAULT_FILTERS: FilterState = {
   status:   "all",
 };
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 export default function HomePage() {
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
 
