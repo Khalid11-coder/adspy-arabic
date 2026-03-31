@@ -6,6 +6,8 @@ import { SearchBar } from "@/components/ads/SearchBar";
 import { CategoryTabs } from "@/components/ads/CategoryTabs";
 import { SortBar } from "@/components/ads/SortBar";
 import { AdGrid } from "@/components/ads/AdGrid";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { useRealtimeAds } from "@/hooks/useRealtimeAds";
 import type { FilterState, SortOption, AdCategory } from "@/types";
 
 const DEFAULT_FILTERS: FilterState = {
@@ -19,7 +21,6 @@ const DEFAULT_FILTERS: FilterState = {
 export default function HomePage() {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   
-  // ✅ تم تصحيح النوع من K إلى keyof FilterState
   const updateFilter = useCallback(
     (key: keyof FilterState, value: FilterState[keyof FilterState]) => {
       setFilters((prev) => ({ ...prev, [key]: value }));
@@ -27,8 +28,10 @@ export default function HomePage() {
     []
   );
 
+  // Realtime subscription — counts new ads arriving
+  const { newAdsCount, clearNewAds } = useRealtimeAds();
+
   return (
-    // ✅ تم إضافة div أب لضبط التنسيق والاتجاه
     <div className="min-h-screen bg-gray-50" dir="rtl">
       
       {/* ── Hero ── */}
@@ -51,13 +54,28 @@ export default function HomePage() {
         </p>
       </section>
 
+      {/* ── Realtime new-ads banner ── */}
+      {newAdsCount > 0 && (
+        <div className="max-w-7xl mx-auto px-4 mb-4">
+          <button
+            onClick={() => {
+              clearNewAds();
+              window.location.reload();
+            }}
+            className="w-full py-2.5 rounded-xl bg-[#1B4FD8] text-white font-bold text-sm hover:bg-[#1E3A8A] transition-colors shadow-md flex items-center justify-center gap-2"
+          >
+            <span className="live-dot w-2 h-2 rounded-full bg-white inline-block" />
+            {newAdsCount} إعلانات جديدة — انقر للتحديث
+          </button>
+        </div>
+      )}
+
       {/* ── Stats ── */}
       <StatsBar />
 
       {/* ── Search ── */}
       <SearchBar
         value={filters.search}
-        // ✅ تم تصحيح سهم الدالة من = > إلى =>
         onChange={(v) => updateFilter("search", v)}
       />
 
@@ -77,8 +95,10 @@ export default function HomePage() {
         onStatusChange={(v) => updateFilter("status", v as FilterState["status"])}
       />
 
-      {/* ── Ad Grid (Infinite Scroll) ── */}
-      <AdGrid filters={filters} />
+      {/* ── Ad Grid (Infinite Scroll) wrapped in ErrorBoundary ── */}
+      <ErrorBoundary>
+        <AdGrid filters={filters} />
+      </ErrorBoundary>
 
       {/* ── Footer ── */}
       <footer className="mt-16 border-t border-gray-200 bg-white">

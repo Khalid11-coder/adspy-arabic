@@ -1,53 +1,57 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import type { Ad, SortOption, AdCategory, AdPlatform, AdStatus } from "@/types";
-
-// استدعاء العميل مرة واحدة خارج الدالة للسرعة
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabaseAdmin } from "@/lib/supabase-server";
+import type { SortOption, AdPlatform, AdStatus } from "@/types";
 
 export const dynamic = "force-dynamic";
+
+// Regex to strip anything that isn't a letter, digit, or space (safe for Arabic + Latin)
+const SAFE_SEARCH_RE = /[^\w\s\u0600-\u06FF\u0750-\u077F]/g;
+function sanitizeSearch(input: string): string {
+  return input.replace(SAFE_SEARCH_RE, "").trim();
+}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
 
-  // تنظيف المدخلات لضمان عدم وجود فراغات زائدة
-  const search   = (searchParams.get("search")   || "").trim();
-  const category = (searchParams.get("category") || "الكل").trim();
-  const sort     = (searchParams.get("sort")     || "latest") as SortOption;
-  const platform = (searchParams.get("platform") || "all") as AdPlatform | "all";
-  const status   = (searchParams.get("status")   || "all") as AdStatus | "all";
-  const limit    = parseInt(searchParams.get("limit") || "9");
-  const offset   = parseInt(searchParams.get("offset") || "0");
+  const rawSearch = (searchParams.get("search") || "").trim();
+  const search    = sanitizeSearch(rawSearch);
+  const category  = (searchParams.get("category") || "الكل").trim();
+  const sort      = (searchParams.get("sort") || "latest") as SortOption;
+  const platform  = (searchParams.get("platform") || "all") as AdPlatform | "all";
+  const status    = (searchParams.get("status") || "all") as AdStatus | "all";
+  const limit     = Math.min(parseInt(searchParams.get("limit") || "9"), 50);
+  const offset    = parseInt(searchParams.get("offset") || "0");
 
   try {
-    let query = supabase
+    let query = supabaseAdmin
       .from("ads_library")
       .select("*", { count: "exact" });
 
-    // 1. فلتر البحث (Search) - نستخدم ilike للبحث غير الحساس لحالة الأحرف
+    // 1. Search — prefer full-text search via search_vector, fallback to ilike
     if (search) {
-      query = query.or(`store_name.ilike.%${search}%,category.ilike.%${search}%`);
+      // Try textSearch first (uses the TSVECTOR search_vector column)
+      query = query.textSearch("search_vector", search, {
+        type: "plain",
+        config: "simple",
+      });
     }
 
-    // 2. فلتر التصنيف (Category) - تجاهل "الكل" أو "all"
+    // 2. Category filter
     if (category !== "الكل" && category !== "all" && category !== "") {
       query = query.eq("category", category);
     }
 
-    // 3. فلتر المنصة (Platform)
+    // 3. Platform filter
     if (platform !== "all") {
       query = query.eq("platform", platform);
     }
 
-    // 4. فلتر الحالة (Status)
+    // 4. Status filter
     if (status !== "all") {
       query = query.eq("status", status);
     }
 
-    // 5. الترتيب (Sorting)
+    // 5. Sorting
     switch (sort) {
       case "latest":
         query = query.order("start_date", { ascending: false });
@@ -65,10 +69,29 @@ export async function GET(req: NextRequest) {
         query = query.order("created_at", { ascending: false });
     }
 
-    // جلب البيانات بناءً على الـ offset والـ limit
+    // 6. Pagination
     const { data, count, error } = await query.range(offset, offset + limit - 1);
 
-    if (error) throw error;
+    if (error) {
+      // If textSearch failed (e.g., search_vector not yet populated), fallback to ilike
+      if (search && error.message?.includes("search_vector")) {
+        const fallback = supabaseAdmin
+          .from("ads_library")
+          .select("*", { count: "exact" })
+          .or(`store_name.ilike.%${search}%,category.ilike.%${search}%`);
+
+        const fbResult = await fallback.range(offset, offset + limit - 1);
+        if (fbResult.error) throw fbResult.error;
+
+        const total = fbResult.count || 0;
+        return NextResponse.json({
+          data: fbResult.data || [],
+          total,
+          has_more: offset + limit < total,
+        });
+      }
+      throw error;
+    }
 
     const total = count || 0;
     const has_more = offset + limit < total;
@@ -79,10 +102,11 @@ export async function GET(req: NextRequest) {
       has_more,
     });
 
-  } catch (err: any) {
-    console.error("API route error:", err.message);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("API route error:", message);
     return NextResponse.json(
-      { data: [], total: 0, has_more: false, error: err.message }, 
+      { data: [], total: 0, has_more: false, error: message },
       { status: 500 }
     );
   }

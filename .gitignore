@@ -8,3 +8,4 @@ __pycache__/
 scraper/logs/
 scraper/.env
 .DS_Store
+tsconfig.tsbuildinfo
