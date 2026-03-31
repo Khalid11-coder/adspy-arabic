@@ -26,7 +26,7 @@ export function AdGrid({ filters }: AdGridProps) {
 
   const { ref: loaderRef, inView } = useInView({ threshold: 0 });
 
-  // 1. تفكيك الفلاتر لمنع اللوب اللانهائي
+  // 1. تفكيك الفلاتر لمنع اللوب اللانهائي ومراقبة التغييرات بدقة
   const { search, category, sort, platform, status } = filters;
 
   const buildUrl = useCallback(
@@ -42,12 +42,12 @@ export function AdGrid({ filters }: AdGridProps) {
       });
       return `/api/ads?${p.toString()}`;
     },
-    // نعتمد على القيم الفردية هنا
     [search, category, sort, platform, status]
   );
 
   const fetchBatch = useCallback(
     async (offset: number, reset = false) => {
+      // إلغاء أي طلب سابق لضمان عدم تداخل البيانات
       if (abortRef.current) abortRef.current.abort();
       abortRef.current = new AbortController();
 
@@ -58,24 +58,31 @@ export function AdGrid({ filters }: AdGridProps) {
         const res = await fetch(buildUrl(offset), {
           signal: abortRef.current.signal,
           headers: {
-            'Accept': 'application/json', // 2. مهم جداً لنيتليفاي
+            'Accept': 'application/json', // مهم جداً لبيئة Production في نيتليفاي
           }
         });
         
-        if (!res.ok) throw new Error("فشل في جلب البيانات");
+        if (!res.ok) throw new Error("فشل في جلب البيانات من السيرفر");
+        
         const json = await res.json();
 
-        // 3. تأمين المصفوفة عشان ما يضرب الكود
+        // --- التعديل الجذري هنا ---
+        // التأكد من استخراج المصفوفة من حقل data لأن الـ API يرجع كائن (Object)
         const newAds = Array.isArray(json?.data) ? json.data : [];
+        const currentTotal = json?.total || 0;
 
         setAds((prev) => (reset ? newAds : [...prev, ...newAds]));
-        setTotal(json?.total || 0);
-        setHasMore(Boolean(json?.has_more));
-        offsetRef.current = offset + BATCH;
+        setTotal(currentTotal);
+        
+        // تحديث حالة "هل يوجد المزيد" بناءً على الـ offset والعدد الكلي
+        const nextOffset = offset + newAds.length;
+        setHasMore(nextOffset < currentTotal && newAds.length > 0);
+        
+        offsetRef.current = nextOffset;
       } catch (e: unknown) {
         if ((e as Error).name !== "AbortError") {
           console.error("Fetch error:", e);
-          setError("حدث خطأ أثناء تحميل الإعلانات. حاول مرة أخرى.");
+          setError("حدث خطأ أثناء تحميل الإعلانات. تأكد من اتصالك وحاول مرة أخرى.");
         }
       } finally {
         setLoading(false);
@@ -85,7 +92,7 @@ export function AdGrid({ filters }: AdGridProps) {
     [buildUrl]
   );
 
-  // Reset on filter change
+  // إعادة ضبط الشبكة عند تغيير أي فلتر
   useEffect(() => {
     setAds([]);
     setTotal(0);
@@ -93,16 +100,16 @@ export function AdGrid({ filters }: AdGridProps) {
     setInitLoading(true);
     offsetRef.current = 0;
     fetchBatch(0, true);
-  // نعتمد على القيم الفردية هنا بعد
   }, [search, category, sort, platform, status, fetchBatch]);
 
-  // Infinite scroll
+  // تفعيل الـ Infinite Scroll عند النزول لأسفل الصفحة
   useEffect(() => {
     if (inView && hasMore && !loading && !initLoading) {
       fetchBatch(offsetRef.current);
     }
   }, [inView, hasMore, loading, initLoading, fetchBatch]);
 
+  // حالة التحميل الأولية (Skeletons)
   if (initLoading) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -113,19 +120,21 @@ export function AdGrid({ filters }: AdGridProps) {
     );
   }
 
+  // حالة الخطأ
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
         <AlertCircle className="w-12 h-12 text-red-400" />
         <p className="text-gray-600 text-lg">{error}</p>
         <Button onClick={() => fetchBatch(0, true)} variant="outline">
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className="w-4 h-4 ml-2" />
           إعادة المحاولة
         </Button>
       </div>
     );
   }
 
+  // حالة عدم وجود نتائج
   if (ads.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
@@ -133,40 +142,46 @@ export function AdGrid({ filters }: AdGridProps) {
           <span className="text-4xl">🔍</span>
         </div>
         <h3 className="text-xl font-bold text-gray-800">لا توجد إعلانات</h3>
-        <p className="text-gray-500">جرب تغيير معايير البحث أو الفلترة</p>
+        <p className="text-gray-500">جرب تغيير معايير البحث أو الفلترة للحصول على نتائج أفضل</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Results count */}
-      <p className="text-sm text-gray-500 font-medium">
-        عرض <span className="text-[#1B4FD8] font-bold">{ads.length}</span> من أصل{" "}
-        <span className="text-[#1B4FD8] font-bold">{total.toLocaleString("en-US")}</span> إعلان
-      </p>
+      {/* عداد النتائج */}
+      <div className="flex justify-between items-center border-b border-gray-50 pb-4">
+        <p className="text-sm text-gray-500 font-medium">
+          عرض <span className="text-[#1B4FD8] font-bold">{ads.length}</span> من أصل{" "}
+          <span className="text-[#1B4FD8] font-bold">{total.toLocaleString("en-US")}</span> إعلان
+        </p>
+      </div>
 
-      {/* Grid */}
+      {/* شبكة الإعلانات */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {ads.map((ad) => (
-          <AdCard key={ad.id} ad={ad} searchQuery={filters.search} />
+          <AdCard key={ad.id} ad={ad} searchQuery={search} />
         ))}
 
-        {/* Skeleton while loading more */}
+        {/* تحميل المزيد (Skeletons) */}
         {loading &&
-          Array.from({ length: BATCH }).map((_, i) => (
+          Array.from({ length: 3 }).map((_, i) => (
             <AdCardSkeleton key={`sk-${i}`} />
           ))}
       </div>
 
-      {/* Infinite scroll sentinel */}
-      {hasMore && <div ref={loaderRef} className="h-4" />}
+      {/* مراقب التمرير (Sentinel) */}
+      {hasMore && <div ref={loaderRef} className="h-10 w-full" />}
 
-      {/* End of results */}
+      {/* نهاية النتائج */}
       {!hasMore && ads.length > 0 && (
-        <p className="text-center text-gray-400 text-sm py-6 border-t border-gray-100">
-          ✅ تم عرض جميع الإعلانات ({total.toLocaleString("en-US")})
-        </p>
+        <div className="py-10 text-center">
+          <p className="text-gray-400 text-sm flex items-center justify-center gap-2">
+            <span className="w-8 h-[1px] bg-gray-200"></span>
+            ✅ تم عرض جميع الإعلانات المتاحة ({total.toLocaleString("en-US")})
+            <span className="w-8 h-[1px] bg-gray-200"></span>
+          </p>
+        </div>
       )}
     </div>
   );

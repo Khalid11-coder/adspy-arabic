@@ -6,7 +6,7 @@ import { SearchBar } from "@/components/ads/SearchBar";
 import { CategoryTabs } from "@/components/ads/CategoryTabs";
 import { SortBar } from "@/components/ads/SortBar";
 import { AdGrid } from "@/components/ads/AdGrid";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ErrorBoundary } from "@/components/ads/ErrorBoundary";
 import { useRealtimeAds } from "@/hooks/useRealtimeAds";
 import type { FilterState, SortOption, AdCategory } from "@/types";
 
