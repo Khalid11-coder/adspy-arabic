@@ -6,6 +6,8 @@ import { SearchBar } from "@/components/ads/SearchBar";
 import { CategoryTabs } from "@/components/ads/CategoryTabs";
 import { SortBar } from "@/components/ads/SortBar";
 import { AdGrid } from "@/components/ads/AdGrid";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { useRealtimeAds } from "@/hooks/useRealtimeAds";
 import type { FilterState, SortOption, AdCategory } from "@/types";
 
 const DEFAULT_FILTERS: FilterState = {
@@ -25,6 +27,9 @@ export default function HomePage() {
     },
     []
   );
+
+  // Realtime subscription — counts new ads arriving
+  const { newAdsCount, clearNewAds } = useRealtimeAds();
 
   return (
     <div className="min-h-screen bg-gray-50" dir="rtl">
@@ -74,9 +79,27 @@ export default function HomePage() {
           />
         </div>
 
+        {/* ── Realtime new-ads banner ── */}
+        {newAdsCount > 0 && (
+          <div className="w-full mb-4">
+            <button
+              onClick={() => {
+                clearNewAds();
+                window.location.reload();
+              }}
+              className="w-full py-2.5 rounded-xl bg-[#1B4FD8] text-white font-bold text-sm hover:bg-[#1E3A8A] transition-colors shadow-md flex items-center justify-center gap-2"
+            >
+              <span className="live-dot w-2 h-2 rounded-full bg-white inline-block" />
+              {newAdsCount} إعلانات جديدة — انقر للتحديث
+            </button>
+          </div>
+        )}
+
         {/* ── Ad Grid ── */}
         <div className="pt-4">
-          <AdGrid filters={filters} />
+          <ErrorBoundary>
+            <AdGrid filters={filters} />
+          </ErrorBoundary>
         </div>
       </main>
 

@@ -26,20 +26,24 @@ export function AdGrid({ filters }: AdGridProps) {
 
   const { ref: loaderRef, inView } = useInView({ threshold: 0 });
 
+  // 1. تفكيك الفلاتر لمنع اللوب اللانهائي
+  const { search, category, sort, platform, status } = filters;
+
   const buildUrl = useCallback(
     (offset: number) => {
       const p = new URLSearchParams({
-        search:   filters.search,
-        category: filters.category,
-        sort:     filters.sort,
-        platform: filters.platform,
-        status:   filters.status,
+        search:   search || "",
+        category: category || "",
+        sort:     sort || "",
+        platform: platform || "",
+        status:   status || "",
         limit:    String(BATCH),
         offset:   String(offset),
       });
       return `/api/ads?${p.toString()}`;
     },
-    [filters]
+    // نعتمد على القيم الفردية هنا
+    [search, category, sort, platform, status]
   );
 
   const fetchBatch = useCallback(
@@ -53,16 +57,24 @@ export function AdGrid({ filters }: AdGridProps) {
       try {
         const res = await fetch(buildUrl(offset), {
           signal: abortRef.current.signal,
+          headers: {
+            'Accept': 'application/json', // 2. مهم جداً لنيتليفاي
+          }
         });
+        
         if (!res.ok) throw new Error("فشل في جلب البيانات");
         const json = await res.json();
 
-        setAds((prev) => (reset ? json.data : [...prev, ...json.data]));
-        setTotal(json.total);
-        setHasMore(json.has_more);
+        // 3. تأمين المصفوفة عشان ما يضرب الكود
+        const newAds = Array.isArray(json?.data) ? json.data : [];
+
+        setAds((prev) => (reset ? newAds : [...prev, ...newAds]));
+        setTotal(json?.total || 0);
+        setHasMore(Boolean(json?.has_more));
         offsetRef.current = offset + BATCH;
       } catch (e: unknown) {
         if ((e as Error).name !== "AbortError") {
+          console.error("Fetch error:", e);
           setError("حدث خطأ أثناء تحميل الإعلانات. حاول مرة أخرى.");
         }
       } finally {
@@ -81,7 +93,8 @@ export function AdGrid({ filters }: AdGridProps) {
     setInitLoading(true);
     offsetRef.current = 0;
     fetchBatch(0, true);
-  }, [filters, fetchBatch]);
+  // نعتمد على القيم الفردية هنا بعد
+  }, [search, category, sort, platform, status, fetchBatch]);
 
   // Infinite scroll
   useEffect(() => {

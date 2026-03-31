@@ -1,12 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 
-// تأكد أن الأسماء مطابقة تماماً لما هو موجود في ملف .env.local
+// Client-side Supabase client (uses NEXT_PUBLIC_ keys, safe for browser)
 const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// التحقق من وجود القيم قبل التشغيل لتجنب أخطاء وقت التنفيذ
 if (!supabaseUrl || !supabaseAnon) {
-  console.error("Missing Supabase Environment Variables");
+  console.error("Missing Supabase Environment Variables (client)");
 }
 
 export const supabase = createClient(

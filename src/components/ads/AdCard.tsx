@@ -149,7 +149,7 @@ export function AdCard({ ad, searchQuery = "" }: AdCardProps) {
           <div className="flex items-center gap-2 min-w-0">
             {/* Logo circle */}
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#1B4FD8] to-[#4F46E5] flex items-center justify-center flex-shrink-0 text-white text-sm font-bold shadow-sm">
-              {ad.store_logo || ad.store_name.charAt(0)}
+              {ad.store_logo || (ad.store_name ? ad.store_name.charAt(0) : "A")}
             </div>
             <span
               className="font-bold text-gray-800 text-sm truncate"
